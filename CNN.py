@@ -1,5 +1,7 @@
 #An example of a few useful things that can be done with DICOM files
 
+
+from __future__ import division
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy
@@ -9,6 +11,7 @@ import theano.tensor as T
 import theano.tensor.nnet as nnet
 import theano.tensor.signal.pool as pool
 import theano
+
 
 #This function creates a dictionary that maps patient IDs to cancer incidence
 def parseLabels(labelFile):
@@ -25,7 +28,6 @@ def parseLabels(labelFile):
             continue
         patientLabels[line[0]] = line[1]
     return patientLabels
-
 
 
 labelFile = open("./labels.csv")
@@ -54,27 +56,72 @@ for directory in dirs:
         patientData.append((numpy.stack(dataList), idLabels[currDir]))
         print(patientData[0][0].shape)
 
-Img = T.tensor4(name="Img")
-images = patientData[0][0][1].reshape(1,1,512,512)
-print(images.shape)
-f1Arr = numpy.random.randn(1, 1, 512, 512) 
 
+Img = T.tensor4(name="Img")
+#Batch size, channels, rows, cols
+images = patientData[0][0][1].reshape(1,1,512,512)
+
+#Layer 1
+f1size = 8
+numFilters1 = 5
+p1Factor = 3
+#outChannels, inChannels, filterRows, filterCols
+f1Arr = numpy.random.randn(numFilters1, 1, f1size ,f1size) 
 F1 = theano.shared(f1Arr, name = "F1")
 bias1 = numpy.random.randn()
 b1 = theano.shared(bias1, name = "b1")
+#Output = batches x channels x 512 - f1size x 512 - f1size
+conv1 = nnet.sigmoid(nnet.conv2d(Img, F1) + b1)
+pool1 = pool.pool_2d(conv1, (p1Factor,p1Factor), ignore_border = True)
+layer1 = theano.function([Img], pool1)
 
-conv1 = nnet.conv2d(Img, F1)
+#Layer 2
+f2size = 7
+numFilters2 = 10
+pool2Factor = 2
+f2Arr = numpy.random.randn(numFilters2, numFilters1, f2size, f2size)
+F2 = theano.shared(f2Arr, name = "F2")
+bias2 = numpy.random.randn()
+b2 = theano.shared(bias2, name = "b2")
+conv2 = nnet.sigmoid(nnet.conv2d(pool1, F2) + b2)
+pool2 = pool.pool_2d(conv2, (pool2Factor,pool2Factor), ignore_border = True)
+layer2 = theano.function([Img], pool2)
 
-#pool1 = pool.pool_2d(conv1,(2,2), ignore_border = True)
+#Calculate the size of the output of the second convolutional layer
+convOutLen = (((512 - numFilters1) //p1Factor + 1) - numFilters2) // pool2Factor + 1
+print(convOutLen)
+convOutLen = convOutLen * convOutLen * numFilters2
 
-layer1Func = theano.function([Img], nnet.sigmoid(conv1 + b1))
+#Layer 3
+b3arr = numpy.random.randn()
+b3 = theano.shared(b3arr, name = "b3")
+w3arr = numpy.random.randn(convOutLen, convOutLen / numFilters2)
+w3 = theano.shared(w3arr, name = "w3")
+hidden3 = theano.dot(pool2.flatten(), w3) + b3
+layer3 = theano.function([Img], hidden3)
 
-result = layer1Func(images)
-print(result)
-plt.subplot(1,2,1)
+#Layer 4
+w4arr = numpy.random.randn(convOutLen / numFilters2)
+w4 = theano.shared(w4arr, name = "w4")
+hidden4In = nnet.sigmoid(hidden3)
+hidden4 = theano.dot(hidden4In, w4)
+layer4 = theano.function([Img], hidden4)
+
+#Output layer
+output = nnet.sigmoid(hidden4)
+
+print(layer2(images).shape)
+result = layer1(images)
+print(result[0][0].shape)
+plt.subplot(1,3,1)
 plt.imshow(patientData[0][0][1])
 plt.gray()
-plt.subplot(1,2,2)
+plt.subplot(1,3,2)
+plt.imshow(result[0][0])
+plt.gray()
+result = layer2(images)
+print(result[0][0].shape)
+plt.subplot(1,3,3)
 plt.imshow(result[0][0])
 plt.gray()
 plt.show()
