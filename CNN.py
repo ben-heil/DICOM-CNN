@@ -191,11 +191,20 @@ for i in range(1000):
             pickle.dump(b3, b3File)
             pickle.dump(w4, w4File)
             pickle.dump(b4, b4File)
+        
+            f1File.close()
+            b1File.close()
+            f2File.close()
+            b2File.close()
+            w3File.close()
+            b3File.close()
+            w4File.close()
+            b4File.close()
+
         except:
             print("Error dumping weight data")
     
-    patientNum = 0
-    #patientNum = int(math.floor(random.random() * len(patientData)))
+    patientNum = int(math.floor(random.random() * len(patientData)))
     label = labels[patientNum]
     for j in range(patientData[patientNum].shape[0]):
         image = patientData[patientNum][j]
