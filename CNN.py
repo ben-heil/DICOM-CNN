@@ -54,17 +54,16 @@ for directory in dirs:
     
         #Add the 3d array of all images from a patient to the list
         patientData.append((numpy.stack(dataList), idLabels[currDir]))
-        print(patientData[0][0].shape)
-
+#PatientData = list of tuples containing (0) image matrix and (1) tag
 
 Img = T.tensor4(name="Img")
-#Batch size, channels, rows, cols
-images = patientData[0][0][1].reshape(1,1,512,512)
+Lab = T.dscalar()
 
 #Layer 1
 f1size = 8
 numFilters1 = 5
 p1Factor = 3
+learnRate = .0001
 #outChannels, inChannels, filterRows, filterCols
 f1Arr = numpy.random.randn(numFilters1, 1, f1size ,f1size) 
 F1 = theano.shared(f1Arr, name = "F1")
@@ -78,7 +77,7 @@ layer1 = theano.function([Img], pool1)
 #Layer 2
 f2size = 7
 numFilters2 = 10
-pool2Factor = 2
+pool2Factor = 6
 f2Arr = numpy.random.randn(numFilters2, numFilters1, f2size, f2size)
 F2 = theano.shared(f2Arr, name = "F2")
 bias2 = numpy.random.randn()
@@ -89,7 +88,6 @@ layer2 = theano.function([Img], pool2)
 
 #Calculate the size of the output of the second convolutional layer
 convOutLen = (((512 - numFilters1) //p1Factor + 1) - numFilters2) // pool2Factor + 1
-print(convOutLen)
 convOutLen = convOutLen * convOutLen * numFilters2
 
 #Layer 3
@@ -110,18 +108,41 @@ layer4 = theano.function([Img], hidden4)
 #Output layer
 output = nnet.sigmoid(hidden4)
 
-print(layer2(images).shape)
-result = layer1(images)
-print(result[0][0].shape)
-plt.subplot(1,3,1)
-plt.imshow(patientData[0][0][1])
-plt.gray()
-plt.subplot(1,3,2)
-plt.imshow(result[0][0])
-plt.gray()
-result = layer2(images)
-print(result[0][0].shape)
-plt.subplot(1,3,3)
-plt.imshow(result[0][0])
-plt.gray()
-plt.show()
+error = T.sqr(abs(output - Lab))
+F1Grad = T.grad(error, F1)
+F2Grad = T.grad(error, F2)
+w3Grad = T.grad(error, w3)
+w4Grad = T.grad(error, w4)
+
+train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRate),
+         (F2, F2 - F2Grad * learnRate),
+         (w3, w3 - w3Grad * learnRate),
+         (w4, w4 - w4Grad * learnRate)])
+
+
+
+
+#Batch size, channels, rows, cols
+images = patientData[0][0][1].reshape(1,1,512,512)
+label = patientData[0][1]
+
+print(label)
+for i in range(100):
+    print(train(images, 0))
+
+
+
+#result = layer1(images)
+#print(result[0][0].shape)
+#plt.subplot(1,3,1)
+#plt.imshow(patientData[0][0][1])
+#plt.gray()
+#plt.subplot(1,3,2)
+#plt.imshow(result[0][0])
+#plt.gray()
+#result = layer2(images)
+#print(result[0][0].shape)
+#plt.subplot(1,3,3)
+#plt.imshow(result[0][0])
+#plt.gray()
+#plt.show()
