@@ -70,7 +70,7 @@ Lab = T.dscalar()
 f1size = 8
 numFilters1 = 5
 p1Factor = 3
-learnRate = .0001
+learnRate = .1
 #Load the shared variables if possible, otherwise initialize them
 try:
     f1File = open("F1_vanilla.save" , "rb")
@@ -98,7 +98,7 @@ try:
     f2File = open("F2_vanilla.save", "rb")
     F2 = pickle.load(f2File)
     f2File.close()
-    b2File = opne("b2_vanilla.save", "rb")
+    b2File = open("b2_vanilla.save", "rb")
     b2 = pickle.load(b2File)
     b2File.close()
 except:
@@ -132,7 +132,7 @@ layer3 = theano.function([Img], hidden3)
 
 #Layer 4
 try:
-    w4File = open("w3_vanilla.save", "rb")
+    w4File = open("w4_vanilla.save", "rb")
     w4 = pickle.load(w4File)
     w4File.close()
     b4File = open("b4_vanilla.save", "rb")
@@ -168,30 +168,48 @@ train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRa
 print(len(patientData))
 print(labels)
 #Batch size, channels, rows, cols
-images = patientData[0][0][1].reshape(1,1,512,512)
 
+print(patientData[0].shape[0])
 
 for i in range(1000):
-    patientNum = math.floor(random.random() * len(patientData[0][0]))
+    if i%50 == 2:
+        try:
+            f1File = open("F1_vanilla.save" , "wb")
+            b1File = open("b1_vanilla.save" , "wb")
+            f2File = open("F2_vanilla.save", "wb")
+            b2File = open("b2_vanilla.save", "wb")
+            w3File = open("r3_vanilla.save", "wb")
+            b3File = open("b3_vanilla.save", "wb")
+            w4File = open("w4_vanilla.save", "wb")
+            b4File = open("b4_vanilla.save", "wb")
+    
+            pickle.dump(F1, f1File)
+            pickle.dump(b1, b1File)
+            pickle.dump(F2, f2File)
+            pickle.dump(b2, b2File)
+            pickle.dump(w3, w3File)
+            pickle.dump(b3, b3File)
+            pickle.dump(w4, w4File)
+            pickle.dump(b4, b4File)
+        except:
+            print("Error dumping weight data")
+    
+    patientNum = 0
+    #patientNum = int(math.floor(random.random() * len(patientData)))
     label = labels[patientNum]
     for j in range(patientData[patientNum].shape[0]):
-        train(patientData[patientNum][j])
-
-print(label)
-for i in range(100):
-    print(train(images, 0))
+        image = patientData[patientNum][j]
+        print(train(image.reshape(1,1,512,512), int(label)))
 
 
-
-#result = layer1(images)
-#print(result[0][0].shape)
+#result = layer1(patientData[0][0].reshape(1,1,512,512))
 #plt.subplot(1,3,1)
-#plt.imshow(patientData[0][0][1])
+#plt.imshow(patientData[0][1])
 #plt.gray()
 #plt.subplot(1,3,2)
 #plt.imshow(result[0][0])
 #plt.gray()
-#result = layer2(images)
+#result = layer2(patientData[0][0].reshape(1,1,512,512))
 #print(result[0][0].shape)
 #plt.subplot(1,3,3)
 #plt.imshow(result[0][0])
