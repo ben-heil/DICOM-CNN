@@ -2,6 +2,8 @@
 
 
 from __future__ import division
+import math
+import random
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy
@@ -11,14 +13,14 @@ import theano.tensor as T
 import theano.tensor.nnet as nnet
 import theano.tensor.signal.pool as pool
 import theano
-
+import pickle
 
 #This function creates a dictionary that maps patient IDs to cancer incidence
 def parseLabels(labelFile):
     #Throw away header
     labelFile.readline()
     patientLabels = {}
-
+    
     #Read each line and add it to the dictionary
     for line in labelFile:
         line = line.strip().split(',')
@@ -30,31 +32,36 @@ def parseLabels(labelFile):
     return patientLabels
 
 
-labelFile = open("./labels.csv")
-idLabels = parseLabels(labelFile)
-
-dirs = os.walk("./images")
-#Skip the directory itself, only look at subdirectories
-dirs.next()
-
-#Create a list of tuples mapping 3d numpy arrays of image data to their label
-for directory in dirs:
-    currDir = os.path.basename(directory[0])
-    patientData = []
-    if currDir in idLabels:
-        dataList = []
-        #Add each array to a list
-        for image in directory[2]:
-            imageHandle = dicom.read_file(directory[0] + '/' + image)
-            imgData = imageHandle.pixel_array
-            dataList.append(imageHandle.pixel_array)
-        
-        #Preprocess all images from the patient to set a zero mean
-        dataList -= numpy.mean(dataList)
+def readImages():
+    labelFile = open("./labels.csv")
+    idLabels = parseLabels(labelFile)
+    dirs = os.walk("./images")
+    #Skip the directory itself, only look at subdirectories
+    dirs.next()
     
-        #Add the 3d array of all images from a patient to the list
-        patientData.append((numpy.stack(dataList), idLabels[currDir]))
+    #Create a list of tuples mapping 3d numpy arrays of image data to their label
+    labels = []
+    patientData = []
+    for directory in dirs:
+        currDir = os.path.basename(directory[0])
+        if currDir in idLabels:
+            dataList = []
+            #Add each array to a list
+            for image in directory[2]:
+                imageHandle = dicom.read_file(directory[0] + '/' + image)
+                imgData = imageHandle.pixel_array
+                dataList.append(imageHandle.pixel_array)
+            
+            #Preprocess all images from the patient to set a zero mean
+            dataList -= numpy.mean(dataList)
+        
+            #Add the 3d array of all images from a patient to the list
+            patientData.append(numpy.stack(dataList))
+            labels.append(idLabels[currDir])
+    return patientData, labels
 #PatientData = list of tuples containing (0) image matrix and (1) tag
+
+patientData, labels = readImages()
 
 Img = T.tensor4(name="Img")
 Lab = T.dscalar()
@@ -64,11 +71,20 @@ f1size = 8
 numFilters1 = 5
 p1Factor = 3
 learnRate = .0001
-#outChannels, inChannels, filterRows, filterCols
-f1Arr = numpy.random.randn(numFilters1, 1, f1size ,f1size) 
-F1 = theano.shared(f1Arr, name = "F1")
-bias1 = numpy.random.randn()
-b1 = theano.shared(bias1, name = "b1")
+#Load the shared variables if possible, otherwise initialize them
+try:
+    f1File = open("F1_vanilla.save" , "rb")
+    F1 = pickle.load(f1File)
+    f1File.close()
+    b1File = open("b1_vanilla.save", "rb")
+    b1 = pickle.load(f1File)
+    b1File.close()
+except:
+    f1Arr = numpy.random.randn(numFilters1, 1, f1size ,f1size) 
+    F1 = theano.shared(f1Arr, name = "F1")
+    bias1 = numpy.random.randn()
+    b1 = theano.shared(bias1, name = "b1")
+
 #Output = batches x channels x 512 - f1size x 512 - f1size
 conv1 = nnet.sigmoid(nnet.conv2d(Img, F1) + b1)
 pool1 = pool.pool_2d(conv1, (p1Factor,p1Factor), ignore_border = True)
@@ -78,10 +94,18 @@ layer1 = theano.function([Img], pool1)
 f2size = 7
 numFilters2 = 10
 pool2Factor = 6
-f2Arr = numpy.random.randn(numFilters2, numFilters1, f2size, f2size)
-F2 = theano.shared(f2Arr, name = "F2")
-bias2 = numpy.random.randn()
-b2 = theano.shared(bias2, name = "b2")
+try:
+    f2File = open("F2_vanilla.save", "rb")
+    F2 = pickle.load(f2File)
+    f2File.close()
+    b2File = opne("b2_vanilla.save", "rb")
+    b2 = pickle.load(b2File)
+    b2File.close()
+except:
+    f2Arr = numpy.random.randn(numFilters2, numFilters1, f2size, f2size)
+    F2 = theano.shared(f2Arr, name = "F2")
+    bias2 = numpy.random.randn()
+    b2 = theano.shared(bias2, name = "b2")
 conv2 = nnet.sigmoid(nnet.conv2d(pool1, F2) + b2)
 pool2 = pool.pool_2d(conv2, (pool2Factor,pool2Factor), ignore_border = True)
 layer2 = theano.function([Img], pool2)
@@ -91,18 +115,36 @@ convOutLen = (((512 - numFilters1) //p1Factor + 1) - numFilters2) // pool2Factor
 convOutLen = convOutLen * convOutLen * numFilters2
 
 #Layer 3
-b3arr = numpy.random.randn()
-b3 = theano.shared(b3arr, name = "b3")
-w3arr = numpy.random.randn(convOutLen, convOutLen / numFilters2)
-w3 = theano.shared(w3arr, name = "w3")
+try:
+    b3File = open("b3_vanilla.save", "rb")
+    b3 = pickle.load(b3File)
+    b3File.close()
+    w3File = open("w3_vanilla.save", "rb")
+    w3 = pickle.load(w3File)
+    w3File.close()
+except:
+    b3arr = numpy.random.randn()
+    b3 = theano.shared(b3arr, name = "b3")
+    w3arr = numpy.random.randn(convOutLen, convOutLen / numFilters2)
+    w3 = theano.shared(w3arr, name = "w3")
 hidden3 = theano.dot(pool2.flatten(), w3) + b3
 layer3 = theano.function([Img], hidden3)
 
 #Layer 4
-w4arr = numpy.random.randn(convOutLen / numFilters2)
-w4 = theano.shared(w4arr, name = "w4")
+try:
+    w4File = open("w3_vanilla.save", "rb")
+    w4 = pickle.load(w4File)
+    w4File.close()
+    b4File = open("b4_vanilla.save", "rb")
+    b4 = pickle.load(b4File)
+    b4File.close()
+except:
+    w4arr = numpy.random.randn(convOutLen / numFilters2)
+    w4 = theano.shared(w4arr, name = "w4")
+    b4arr = numpy.random.randn()
+    b4 = theano.shared(b4arr, name = "b4")
 hidden4In = nnet.sigmoid(hidden3)
-hidden4 = theano.dot(hidden4In, w4)
+hidden4 = theano.dot(hidden4In, w4) + b4
 layer4 = theano.function([Img], hidden4)
 
 #Output layer
@@ -120,11 +162,20 @@ train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRa
          (w4, w4 - w4Grad * learnRate)])
 
 
+#END OF ARCHITECTURE
 
 
+print(len(patientData))
+print(labels)
 #Batch size, channels, rows, cols
 images = patientData[0][0][1].reshape(1,1,512,512)
-label = patientData[0][1]
+
+
+for i in range(1000):
+    patientNum = math.floor(random.random() * len(patientData[0][0]))
+    label = labels[patientNum]
+    for j in range(patientData[patientNum].shape[0]):
+        train(patientData[patientNum][j])
 
 print(label)
 for i in range(100):
