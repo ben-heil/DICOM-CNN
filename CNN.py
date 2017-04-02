@@ -59,7 +59,36 @@ def readImages():
             patientData.append(numpy.stack(dataList))
             labels.append(idLabels[currDir])
     return patientData, labels
-#PatientData = list of tuples containing (0) image matrix and (1) tag
+
+
+def readValidationImages():
+    labelFile = open("./labels.csv")
+    idLabels = parseLabels(labelFile)
+    dirs = os.walk("./validation")
+    #Skip the directory itself, only look at subdirectories
+    dirs.next()
+    
+    labels = []
+    patientData = []
+    for directory in dirs:
+        currDir = os.path.basename(directory[0])
+        if currDir in idLabels:
+            dataList = []
+            #Add each array to a list
+            for image in directory[2]:
+                imageHandle = dicom.read_file(directory[0] + '/' + image)
+                imgData = imageHandle.pixel_array
+                dataList.append(imageHandle.pixel_array)
+            
+            #Preprocess all images from the patient to set a zero mean
+            dataList -= numpy.mean(dataList)
+        
+            #Add the 3d array of all images from a patient to the list
+            patientData.append(numpy.stack(dataList))
+            labels.append(idLabels[currDir])
+    return patientData, labels
+
+
 
 patientData, labels = readImages()
 
@@ -171,45 +200,59 @@ print(labels)
 
 print(patientData[0].shape[0])
 
-for i in range(1000):
-    if i%50 == 2:
-        try:
-            f1File = open("F1_vanilla.save" , "wb")
-            b1File = open("b1_vanilla.save" , "wb")
-            f2File = open("F2_vanilla.save", "wb")
-            b2File = open("b2_vanilla.save", "wb")
-            w3File = open("r3_vanilla.save", "wb")
-            b3File = open("b3_vanilla.save", "wb")
-            w4File = open("w4_vanilla.save", "wb")
-            b4File = open("b4_vanilla.save", "wb")
-    
-            pickle.dump(F1, f1File)
-            pickle.dump(b1, b1File)
-            pickle.dump(F2, f2File)
-            pickle.dump(b2, b2File)
-            pickle.dump(w3, w3File)
-            pickle.dump(b3, b3File)
-            pickle.dump(w4, w4File)
-            pickle.dump(b4, b4File)
-        
-            f1File.close()
-            b1File.close()
-            f2File.close()
-            b2File.close()
-            w3File.close()
-            b3File.close()
-            w4File.close()
-            b4File.close()
-
-        except:
-            print("Error dumping weight data")
-    
+besterr = float("inf")
+for i in range(10000):
     patientNum = int(math.floor(random.random() * len(patientData)))
     label = labels[patientNum]
     for j in range(patientData[patientNum].shape[0]):
         image = patientData[patientNum][j]
         print(train(image.reshape(1,1,512,512), int(label)))
+    
+    #Use validation set to test error every 30 iterations
+    if i%30 == 29:
+        valImages, valLabels = readValImages()
+        currErr = 0
 
+        for j in range(len(valImages)):
+            label = valLabels[j]
+            for k in range(valImages[j].shape[0]):
+                image = valImages[j][k]
+                currErr += error(image.reshape(1,1,512,512), int(label))
+
+        print("Validation err = " + str(currErr))
+        if  currErr < besterr:
+            besterr = currErr
+
+            try:
+                f1File = open("F1_vanilla.save" , "wb")
+                b1File = open("b1_vanilla.save" , "wb")
+                f2File = open("F2_vanilla.save", "wb")
+                b2File = open("b2_vanilla.save", "wb")
+                w3File = open("r3_vanilla.save", "wb")
+                b3File = open("b3_vanilla.save", "wb")
+                w4File = open("w4_vanilla.save", "wb")
+                b4File = open("b4_vanilla.save", "wb")
+    
+                pickle.dump(F1, f1File)
+                pickle.dump(b1, b1File)
+                pickle.dump(F2, f2File)
+                pickle.dump(b2, b2File)
+                pickle.dump(w3, w3File)
+                pickle.dump(b3, b3File)
+                pickle.dump(w4, w4File)
+                pickle.dump(b4, b4File)
+            
+                f1File.close()
+                b1File.close()
+                f2File.close()
+                b2File.close()
+                w3File.close()
+                b3File.close()
+                w4File.close()
+                b4File.close()
+
+            except:
+                print("Error dumping weight data")
 
 #result = layer1(patientData[0][0].reshape(1,1,512,512))
 #plt.subplot(1,3,1)
