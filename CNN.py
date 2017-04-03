@@ -31,6 +31,33 @@ def parseLabels(labelFile):
         patientLabels[line[0]] = line[1]
     return patientLabels
 
+def imageCount():
+    dirs = os.walk("./images")
+    #Skip the directory itself, only look at subdirectories
+    return len([dir for dir in dirs]) - 1
+
+def readScan(scanNum):
+    print("Reading " + str(scanNum))
+    dirGen = os.walk("./images")
+    dirs = [dir for dir in dirGen]
+    labelFile = open("./labels.csv")
+    idLabels = parseLabels(labelFile)
+    
+    patientData = []
+    fileCount = 0
+    currDir = os.path.basename(dirs[scanNum][0])
+    dataList = []
+    #Add each array to a list
+    for image in dirs[scanNum][2]:
+        imageHandle = dicom.read_file(dirs[scanNum][0] + '/' + image)
+        imgData = imageHandle.pixel_array
+        dataList.append(imageHandle.pixel_array)
+            
+        
+        #Add the 3d array of all images from a patient to the list
+        patientData = numpy.stack(dataList)
+    patientData -= numpy.mean(patientData)
+    return patientData, idLabels[currDir]
 
 def readImages():
     labelFile = open("./labels.csv")
@@ -76,10 +103,12 @@ def readValidationImages():
     patientData = []
     for directory in dirs:
         currDir = os.path.basename(directory[0])
-        if currDir in idLabels:
+	if currDir in idLabels:
             dataList = []
             #Add each array to a list
             for image in directory[2]:
+                if image == "desktop.ini":
+                    continue
                 imageHandle = dicom.read_file(directory[0] + '/' + image)
                 imgData = imageHandle.pixel_array
                 dataList.append(imageHandle.pixel_array)
@@ -93,8 +122,6 @@ def readValidationImages():
     return patientData, labels
 
 
-
-patientData, labels = readImages()
 
 Img = T.tensor4(name="Img")
 Lab = T.dscalar()
@@ -158,7 +185,7 @@ try:
 except:
     b3arr = numpy.random.randn()
     b3 = theano.shared(b3arr, name = "b3")
-    w3arr = numpy.random.randn(convOutLen, convOutLen / numFilters2)
+    w3arr = numpy.random.randn(convOutLen, convOutLen // numFilters2)
     w3 = theano.shared(w3arr, name = "w3")
 hidden3 = theano.dot(pool2.flatten(), w3) + b3
 layer3 = theano.function([Img], hidden3)
@@ -172,7 +199,7 @@ try:
     b4 = pickle.load(b4File)
     b4File.close()
 except:
-    w4arr = numpy.random.randn(convOutLen / numFilters2)
+    w4arr = numpy.random.randn(convOutLen // numFilters2)
     w4 = theano.shared(w4arr, name = "w4")
     b4arr = numpy.random.randn()
     b4 = theano.shared(b4arr, name = "b4")
@@ -197,20 +224,14 @@ train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRa
 
 #END OF ARCHITECTURE
 
-
-print(len(patientData))
-print(labels)
-#Batch size, channels, rows, cols
-
-print(patientData[0].shape[0])
-
-valImages, valLabels = readValImages()
+valImages, valLabels = readValidationImages()
 besterr = float("inf")
+patientCount = imageCount()
 for i in range(10000):
-    patientNum = int(math.floor(random.random() * len(patientData)))
-    label = labels[patientNum]
-    for j in range(patientData[patientNum].shape[0]):
-        image = patientData[patientNum][j]
+    patientNum = int(math.floor(random.random() * patientCount ) + 1)
+    patientData, label = readScan(patientNum)  
+    for j in range(patientData.shape[0]):
+        image = patientData[j]
         print(train(image.reshape(1,1,512,512), int(label)))
     
     #Use validation set to test error every 30 iterations
