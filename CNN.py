@@ -204,6 +204,7 @@ print(labels)
 
 print(patientData[0].shape[0])
 
+valImages, valLabels = readValImages()
 besterr = float("inf")
 for i in range(10000):
     patientNum = int(math.floor(random.random() * len(patientData)))
@@ -214,7 +215,6 @@ for i in range(10000):
     
     #Use validation set to test error every 30 iterations
     if i%30 == 29:
-        valImages, valLabels = readValImages()
         currErr = 0
 
         for j in range(len(valImages)):
