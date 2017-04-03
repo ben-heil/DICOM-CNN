@@ -56,7 +56,6 @@ def readScan(scanNum):
         
         #Add the 3d array of all images from a patient to the list
         patientData = numpy.stack(dataList)
-    patientData -= numpy.mean(patientData)
     return patientData, idLabels[currDir]
 
 def readImages():
@@ -110,7 +109,7 @@ def readValidationImages():
                 if image == "desktop.ini":
                     continue
                 imageHandle = dicom.read_file(directory[0] + '/' + image)
-                imgData = imageHandle.pixel_array
+                imgData = imageHandle.pixel_array.astype(float)
                 dataList.append(imageHandle.pixel_array)
             
             #Preprocess all images from the patient to set a zero mean
