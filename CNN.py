@@ -222,7 +222,7 @@ for i in range(10000):
         print("Validation err = " + str(currErr))
         if  currErr < besterr:
             besterr = currErr
-
+            print("Saving weight data")
             try:
                 f1File = open("F1_vanilla.save" , "wb")
                 b1File = open("b1_vanilla.save" , "wb")
