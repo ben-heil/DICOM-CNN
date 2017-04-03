@@ -42,7 +42,11 @@ def readImages():
     #Create a list of tuples mapping 3d numpy arrays of image data to their label
     labels = []
     patientData = []
+    fileCount = 0
     for directory in dirs:
+        fileCount += 1
+        if fileCount %30 == 1:
+            print("Read " + str(fileCount) + " files")
         currDir = os.path.basename(directory[0])
         if currDir in idLabels:
             dataList = []
