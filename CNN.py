@@ -55,7 +55,12 @@ def readScan(scanNum):
         #Add the 3d array of all images from a patient to the list
         patientData = numpy.stack(dataList).astype(float)
     patientData -= numpy.mean(patientData)
-    return patientData, idLabels[currDir]
+    label = -1
+    try:
+        label = idLabels[currDir]
+    except:
+        label = -1
+    return patientData, label 
 
 def readImages():
     labelFile = open("./labels.csv")
@@ -236,12 +241,15 @@ for i in range(10000):
     print(i)
     patientNum = int(math.floor(random.random() * patientCount ) + 1)
     patientData, label = readScan(patientNum)  
+    if label == -1:
+        continue
+
     for j in range(patientData.shape[0]):
         image = patientData[j]
         print(train(image.reshape(1,1,512,512), int(label)))
     
-    #Use validation set to test error every 30 iterations
-    if i%10 == 0:
+    #Use validation set to test error every 5 iterations
+    if i%5 == 0:
         currErr = 0
 
         for j in range(len(valImages)):
