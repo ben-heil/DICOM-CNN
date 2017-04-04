@@ -29,14 +29,14 @@ def parseLabels(labelFile):
         patientLabels[line[0]] = line[1]
     return patientLabels
 
-def imageCount():
-    dirs = os.walk("./images")
+def imageCount(dirName):
+    dirs = os.walk("./" + dirName)
     #Skip the directory itself, only look at subdirectories
     return len([dir for dir in dirs]) - 1
 
-def readScan(scanNum):
+def readScan(scanNum, dirName):
     print("Reading " + str(scanNum))
-    dirGen = os.walk("./images")
+    dirGen = os.walk("./" + dirName)
     dirs = [dir for dir in dirGen]
     labelFile = open("./labels.csv")
     idLabels = parseLabels(labelFile)
@@ -236,18 +236,28 @@ train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRa
 print("Reading validation images")
 valImages, valLabels = readValidationImages()
 besterr = float("inf")
-patientCount = imageCount()
+posPatientCount = imageCount("posTrain")
+negPatientCount = imageCount("negTrain")
 for i in range(10000):
     print(i)
-    patientNum = int(math.floor(random.random() * patientCount ) + 1)
-    patientData, label = readScan(patientNum)  
+    patientNum = int(math.floor(random.random() * posPatientCount ) + 1)
+    posPatientData, label = readScan(patientNum, "posTrain")
+    patientNum = int(math.floor(random.random() * negPatientCount ) + 1)
+    negPatientData, negLabel = readScan(patientNum, "negTrain")
     if label == -1:
         continue
 
-    for j in range(patientData.shape[0]):
-        image = patientData[j]
-        print(train(image.reshape(1,1,512,512), int(label)))
-    
+    sumErr = 0
+    for j in range(posPatientData.shape[0]):
+        image = posPatientData[j]
+        sumErr += train(image.reshape(1,1,512,512), int(label))
+    print("Pos err = " + str(sumErr))
+    sumErr = 0
+    for j in range(negPatientData.shape[0]):
+	image = negPatientData[j]
+        sumErr += train(image.reshape(1,1,512,512), int(label))
+    print("Neg err = " + str(sumErr))
+
     #Use validation set to test error every 5 iterations
     if i%5 == 0:
         currErr = 0
