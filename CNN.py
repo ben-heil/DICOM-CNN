@@ -223,13 +223,20 @@ F1Grad = T.grad(error, F1)
 F2Grad = T.grad(error, F2)
 w3Grad = T.grad(error, w3)
 w4Grad = T.grad(error, w4)
+b1Grad = T.grad(error, F1)
+b2Grad = T.grad(error, F2)
+b3Grad = T.grad(error, w3)
+b4Grad = T.grad(error, w4)
 
 validate = theano.function([Img, Lab], error)
 train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRate),
          (F2, F2 - F2Grad * learnRate),
          (w3, w3 - w3Grad * learnRate),
-         (w4, w4 - w4Grad * learnRate)])
-
+         (w4, w4 - w4Grad * learnRate),
+         (b1, b1 - b1Grad * learnRate),
+         (b2, b2 - b1Grad * learnRate),
+         (b3, b3 - b1Grad * learnRate),
+         (b4, b4 - b1Grad * learnRate)])
 
 #END OF ARCHITECTURE
 
@@ -238,6 +245,9 @@ valImages, valLabels = readValidationImages()
 besterr = float("inf")
 posPatientCount = imageCount("posTrain")
 negPatientCount = imageCount("negTrain")
+
+
+
 for i in range(10000):
     print(i)
     patientNum = int(math.floor(random.random() * posPatientCount ) + 1)
@@ -264,9 +274,11 @@ for i in range(10000):
 
         for j in range(len(valImages)):
             label = valLabels[j]
+            print(label)
             for k in range(valImages[j].shape[0]):
                 image = valImages[j][k]
                 currErr += validate(image.reshape(1,1,512,512), int(label))
+		print(currErr)
 
         print("Validation err = " + str(currErr))
         if  currErr < besterr:
