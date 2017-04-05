@@ -275,18 +275,16 @@ for i in range(10000):
 
         for j in range(len(valImages)):
             label = valLabels[j]
-            print(label)
             for k in range(valImages[j].shape[0]):
                 image = valImages[j][k]
                 currErr += validate(image.reshape(1,1,512,512), int(label))
-		print(currErr)
 
         print("Validation err = " + str(currErr))
         if  currErr < besterr:
             besterr = currErr
             print("Saving weight data")
             iterationFile = open("bestErrorIteration.txt", "w+")
-            iterationFile.write(str(i))
+            iterationFile.write(str(i) + "\n" + str(bestErr))
             iterationFile.close()
             try:
                 f1File = open("F1_vanilla.save" , "wb")
