@@ -134,7 +134,8 @@ print("Compiling layer 1")
 f1size = 8
 numFilters1 = 5
 p1Factor = 3
-learnRate = .01
+learnVal = numpy.array(.01)
+learnRate = theano.shared(learnVal, 'learnRate')
 #Load the shared variables if possible, otherwise initialize them
 try:
     f1File = open("F1_vanilla.save" , "rb")
@@ -223,10 +224,10 @@ F1Grad = T.grad(error, F1)
 F2Grad = T.grad(error, F2)
 w3Grad = T.grad(error, w3)
 w4Grad = T.grad(error, w4)
-b1Grad = T.grad(error, F1)
-b2Grad = T.grad(error, F2)
-b3Grad = T.grad(error, w3)
-b4Grad = T.grad(error, w4)
+b1Grad = T.grad(error, b1)
+b2Grad = T.grad(error, b2)
+b3Grad = T.grad(error, b3)
+b4Grad = T.grad(error, b4)
 
 validate = theano.function([Img, Lab], error)
 train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRate),
@@ -234,9 +235,9 @@ train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRa
          (w3, w3 - w3Grad * learnRate),
          (w4, w4 - w4Grad * learnRate),
          (b1, b1 - b1Grad * learnRate),
-         (b2, b2 - b1Grad * learnRate),
-         (b3, b3 - b1Grad * learnRate),
-         (b4, b4 - b1Grad * learnRate)])
+         (b2, b2 - b2Grad * learnRate),
+         (b3, b3 - b3Grad * learnRate),
+         (b4, b4 - b4Grad * learnRate)])
 
 #END OF ARCHITECTURE
 
@@ -246,7 +247,7 @@ besterr = float("inf")
 posPatientCount = imageCount("posTrain")
 negPatientCount = imageCount("negTrain")
 
-
+logFile = open("cnnLog.txt", "w")
 
 for i in range(10000):
     print(i)
@@ -261,14 +262,14 @@ for i in range(10000):
     for j in range(posPatientData.shape[0]):
         image = posPatientData[j]
         sumErr += train(image.reshape(1,1,512,512), int(label))
-    print("Pos err = " + str(sumErr))
+    logFile.write("Pos err = " + str(sumErr))
     sumErr = 0
     for j in range(negPatientData.shape[0]):
 	image = negPatientData[j]
-        sumErr += train(image.reshape(1,1,512,512), int(label))
-    print("Neg err = " + str(sumErr))
+        sumErr += train(image.reshape(1,1,512,512), int(negLabel))
+    logFile.write("\tNeg err = " + str(sumErr) + "\n")
 
-    #Use validation set to test error every 5 iterations
+    #Use validation set to test error
     if i%5 == 0:
         currErr = 0
 
