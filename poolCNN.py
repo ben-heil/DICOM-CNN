@@ -33,13 +33,15 @@ def maxPool(images, endSize):
     totalImages = len(images)
     poolSize = totalImages // endSize
     extras = totalImages % endSize
-    extraIteration = totalImages // extras
+    if extras > 0:
+        extraIteration = totalImages // extras
+    else:
+        extraIteration = 0
     extraCount = 0
     i = 0
     iteration = 0
     output = numpy.zeros((endSize,512,512))
 
-    print(images.shape[0])
     while iteration < endSize:
     #while i < images.shape[0]:
         size = poolSize
@@ -126,18 +128,17 @@ tensor5 = T.TensorType('float64', (False,)*5)
 
 Img = tensor5(name="Img")
 Lab = T.dscalar()
-endSize = 100
+endSize = 100 
 
 #Layer 1
 print("Compiling layer 1")
 f1size = 3
 f1Depth = 3
 numFilters1 = 5
-p1Factor = 3
+p1Factor = 5
+p1Depth = 5
 learnVal = numpy.array(.01)
 learnRate = theano.shared(learnVal, 'learnRate')
-l1StrideArr = numpy.array([1,1,1])
-l1Stride = theano.shared(l1StrideArr, 'l1Stride')
 
 #Load the shared variables if possible, otherwise initialize them
 try:
@@ -155,17 +156,16 @@ except:
 
 #Output = batches x 512 - (f1size-1) x 512 - (f1size-1) x endSize/f1Depth - 1 x channels
 conv1 = nnet.sigmoid(nnet.conv3d(Img, F1) + b1)
-pool1 = pool.pool_3d(conv1, (p1Factor,p1Factor,p1Factor), ignore_border = True)
+pool1 = pool.pool_3d(conv1, (p1Depth,p1Factor,p1Factor), ignore_border = True)
 layer1 = theano.function([Img], pool1)
 
 #Layer 2
 print("Compiling layer 2")
 f2size = 7
-f2depth = 3
+f2Depth = 2
 numFilters2 = 10
-pool2Factor = 6
-l2StrideArr = numpy.array([1,1,1])
-l2Stride = theano.shared(l2StrideArr, 'l2Stride')
+pool2Factor = 8
+pool2Depth = 5
 
 try:
     f2File = open("F2_pooled.save", "rb")
@@ -175,17 +175,17 @@ try:
     b2 = pickle.load(b2File)
     b2File.close()
 except:
-    f2Arr = numpy.random.randn(numFilters2, numFilters1, f2depth, f2size, f2size)
+    f2Arr = numpy.random.randn(numFilters2, numFilters1, f2Depth, f2size, f2size)
     F2 = theano.shared(f2Arr, name = "F2")
     bias2 = numpy.random.randn()
     b2 = theano.shared(bias2, name = "b2")
 conv2 = nnet.sigmoid(nnet.conv3d(pool1, F2) + b2)
-pool2 = pool.pool_2d(conv2, (pool2Factor,pool2Factor), ignore_border = True)
+pool2 = pool.pool_3d(conv2, (pool2Depth,pool2Factor,pool2Factor), ignore_border = True)
 layer2 = theano.function([Img], pool2)
 
 #Calculate the size of the output of the second convolutional layer
-convOutLen = (((512 - numFilters1) //p1Factor + 1) - numFilters2) // pool2Factor + 1
-convOutDepth = (((endSize - numFilters1) // f1Depth + 1) - numFilters2) //f2depth + 1
+convOutLen = (((512 - f1size) //p1Factor + 1) - f2size) // pool2Factor + 1
+convOutDepth = (((endSize -f1Depth) // p1Depth + 1) - f2Depth) //pool2Depth + 1
 convOutLen = convOutLen * convOutLen * numFilters2 * convOutDepth
 
 #Layer 3
@@ -250,7 +250,7 @@ train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRa
 #END OF ARCHITECTURE
 
 print("Reading validation images")
-valImages, valLabels = readValidationImages()
+#valImages, valLabels = readValidationImages()
 besterr = float("inf")
 posPatientCount = imageCount("posTrain")
 negPatientCount = imageCount("negTrain")
@@ -268,9 +268,10 @@ for i in range(10000):
 
     print("Pooling images")
     posImage = maxPool(posPatientData, endSize)
-    print(posImage.shape)
     negImage = maxPool(negPatientData, endSize)
-    print(layer1(posImage.reshape(1,1,endSize,512,512)).shape)
+    print("Pooling complete")
+    print(layer2(posImage.reshape(1,1,endSize,512,512)).shape)
+    print("Training...")
     posErr = train(posImage.reshape(1,1,endSize,512,512), int(posLabel))
     negErr = train(negImage.reshape(1,1,endSize,512,512), int(negLabel))
     
