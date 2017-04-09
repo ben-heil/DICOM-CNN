@@ -128,15 +128,21 @@ tensor5 = T.TensorType('float64', (False,)*5)
 
 Img = tensor5(name="Img")
 Lab = T.dscalar()
-endSize = 100 
+endSize = 60 
+
+#Layer 0 (shrink images)
+p0Factor = 4
+
+pool0 = pool.pool_2d(Img, (p0Factor, p0Factor))
+layer0 = theano.function([Img], pool0)
 
 #Layer 1
 print("Compiling layer 1")
-f1size = 3
+f1size = 5
 f1Depth = 3
-numFilters1 = 5
-p1Factor = 5
-p1Depth = 5
+numFilters1 = 2
+p1Factor = 4
+p1Depth = 2
 learnVal = numpy.array(.01)
 learnRate = theano.shared(learnVal, 'learnRate')
 
@@ -155,16 +161,16 @@ except:
     b1 = theano.shared(bias1, name = "b1")
 
 #Output = batches x 512 - (f1size-1) x 512 - (f1size-1) x endSize/f1Depth - 1 x channels
-conv1 = nnet.sigmoid(nnet.conv3d(Img, F1) + b1)
+conv1 = nnet.sigmoid(nnet.conv3d(pool0, F1) + b1)
 pool1 = pool.pool_3d(conv1, (p1Depth,p1Factor,p1Factor), ignore_border = True)
 layer1 = theano.function([Img], pool1)
 
 #Layer 2
 print("Compiling layer 2")
-f2size = 7
+f2size = 10
 f2Depth = 2
-numFilters2 = 10
-pool2Factor = 8
+numFilters2 = 2 
+pool2Factor = 4
 pool2Depth = 5
 
 try:
@@ -184,9 +190,12 @@ pool2 = pool.pool_3d(conv2, (pool2Depth,pool2Factor,pool2Factor), ignore_border 
 layer2 = theano.function([Img], pool2)
 
 #Calculate the size of the output of the second convolutional layer
-convOutLen = (((512 - f1size) //p1Factor + 1) - f2size) // pool2Factor + 1
-convOutDepth = (((endSize -f1Depth) // p1Depth + 1) - f2Depth) //pool2Depth + 1
+convOutLen = (((512//p0Factor - f1size) //p1Factor + 1) - f2size) // pool2Factor 
+print(convOutLen)
+convOutDepth = (((endSize -f1Depth) // p1Depth + 1) - f2Depth) //pool2Depth 
 convOutLen = convOutLen * convOutLen * numFilters2 * convOutDepth
+print(convOutLen)
+print(convOutDepth)
 
 #Layer 3
 print("Compiling layer 3")
@@ -250,12 +259,14 @@ train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRa
 #END OF ARCHITECTURE
 
 print("Reading validation images")
-#valImages, valLabels = readValidationImages()
+valImages, valLabels = readValidationImages()
 besterr = float("inf")
 posPatientCount = imageCount("posTrain")
 negPatientCount = imageCount("negTrain")
 
-logFile = open("cnnLog.txt", "w")
+logFile = open("poolCNNLog.txt", "w")
+
+bestErr = float("inf")
 
 for i in range(10000):
     print(i)
@@ -270,7 +281,7 @@ for i in range(10000):
     posImage = maxPool(posPatientData, endSize)
     negImage = maxPool(negPatientData, endSize)
     print("Pooling complete")
-    print(layer2(posImage.reshape(1,1,endSize,512,512)).shape)
+    #print(layer2(posImage.reshape(1,1,endSize,512,512)).shape)
     print("Training...")
     posErr = train(posImage.reshape(1,1,endSize,512,512), int(posLabel))
     negErr = train(negImage.reshape(1,1,endSize,512,512), int(negLabel))
@@ -293,7 +304,7 @@ for i in range(10000):
         if  currErr < besterr:
             besterr = currErr
             print("Saving weight data")
-            iterationFile = open("bestErrorIteration.txt", "w+")
+            iterationFile = open("poolCNNErrorIteration.txt", "w+")
             iterationFile.write(str(i) + "\n" + str(bestErr))
             iterationFile.close()
             try:
