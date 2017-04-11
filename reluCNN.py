@@ -163,13 +163,13 @@ def main():
         b1 = pickle.load(f1File)
         b1File.close()
     except:
-        f1Arr = numpy.random.randn(numFilters1,1,f1Depth,f1size,f1size) 
+        f1Arr = numpy.random.uniform(.01,.1,(numFilters1,1,f1Depth,f1size,f1size))
         F1 = theano.shared(f1Arr, name = "F1")
-        bias1 = numpy.random.randn()
+        bias1 = numpy.array(.1)
         b1 = theano.shared(bias1, name = "b1")
     
     #Output = batches x 512 - (f1size-1) x 512 - (f1size-1) x endSize/f1Depth - 1 x channels
-    conv1 = nnet.relu(nnet.conv3d(pool0, F1) + b1)
+    conv1 = nnet.relu(nnet.conv3d(pool0, F1) + b1, .01)
     pool1 = pool.pool_3d(conv1, (p1Depth,p1Factor,p1Factor), ignore_border = True)
     layer1 = theano.function([Img], pool1)
     
@@ -189,11 +189,11 @@ def main():
         b2 = pickle.load(b2File)
         b2File.close()
     except:
-        f2Arr = numpy.random.randn(numFilters2, numFilters1, f2Depth, f2size, f2size)
+        f2Arr = numpy.random.uniform(.01,.1,(numFilters2, numFilters1, f2Depth, f2size, f2size))
         F2 = theano.shared(f2Arr, name = "F2")
-        bias2 = numpy.random.randn()
+        bias2 = numpy.array(.1)
         b2 = theano.shared(bias2, name = "b2")
-    conv2 = nnet.relu(nnet.conv3d(pool1, F2) + b2)
+    conv2 = nnet.relu(nnet.conv3d(pool1, F2) + b2, .01)
     pool2 = pool.pool_3d(conv2, (pool2Depth,pool2Factor,pool2Factor), ignore_border = True)
     layer2 = theano.function([Img], pool2)
     
@@ -212,9 +212,9 @@ def main():
         w3 = pickle.load(w3File)
         w3File.close()
     except:
-        b3arr = numpy.random.randn()
+        b3arr = numpy.array(.1)
         b3 = theano.shared(b3arr, name = "b3")
-        w3arr = numpy.random.randn(convOutLen, convOutLen // numFilters2)
+        w3arr = numpy.random.uniform(.01,.1,(convOutLen, convOutLen // numFilters2))
         w3 = theano.shared(w3arr, name = "w3")
     hidden3 = theano.dot(pool2.flatten(), w3) + b3
     layer3 = theano.function([Img], hidden3)
@@ -229,11 +229,11 @@ def main():
         b4 = pickle.load(b4File)
         b4File.close()
     except:
-        w4arr = numpy.random.randn(convOutLen // numFilters2)
+        w4arr = numpy.random.uniform(.01,1,(convOutLen // numFilters2))
         w4 = theano.shared(w4arr, name = "w4")
-        b4arr = numpy.random.randn()
+        b4arr = numpy.array(.1)
         b4 = theano.shared(b4arr, name = "b4")
-    hidden4In = nnet.relu(hidden3)
+    hidden4In = nnet.relu(hidden3, .01)
     hidden4 = theano.dot(hidden4In, w4) + b4
     layer4 = theano.function([Img], hidden4)
     
