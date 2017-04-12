@@ -1,4 +1,4 @@
-#A modification of the smallPool CNN that uses relu activation units
+#A modification of the relu CNN that uses relu activation units
 
 from __future__ import division
 import math
@@ -7,123 +7,15 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy
 import dicom
-import os 
 import theano.tensor as T
 import theano.tensor.nnet as nnet
 import theano.tensor.signal.pool as pool
 import theano
 import pickle
 import argparse
+from utilityFunctions import parseLabels, maxPool, imageCount, readScan
+from utilityFunctions import readValidationImages 
 
-#This function creates a dictionary that maps patient IDs to cancer incidence
-def parseLabels(labelFile):
-    #Throw away header
-    labelFile.readline()
-    patientLabels = {}
-    
-    #Read each line and add it to the dictionary
-    for line in labelFile:
-        line = line.strip().split(',')
-        #print(line)
-        #Throw out malformed input and empty lines
-        if len(line) != 2:
-            continue
-        patientLabels[line[0]] = line[1]
-    return patientLabels
-
-def maxPool(images, endSize):
-    totalImages = len(images)
-    poolSize = totalImages // endSize
-    extras = totalImages % endSize
-    if extras > 0:
-        extraIteration = totalImages // extras
-    else:
-        extraIteration = 0
-    extraCount = 0
-    i = 0
-    iteration = 0
-    output = numpy.zeros((endSize,512,512))
-
-    while iteration < endSize:
-    #while i < images.shape[0]:
-        size = poolSize
-        if iteration % (extraIteration - 1) == 0 and extraCount < extras:
-            extraCount += 1
-            size += 1
-
-        choice = i + int(math.floor(random.random() * size))
-        #print(output.shape)
-        #print(images.shape)
-        #print(iteration)
-        #print(i)
-        output[iteration] = images[choice]
-        
-        i += size 
-        iteration += 1
-    return output 
-        
-
-def imageCount(dirName):
-    dirs = os.walk("./" + dirName)
-    #Skip the directory itself, only look at subdirectories
-    return len([dir for dir in dirs]) - 1
-
-def readScan(scanNum, dirName):
-    print("Reading image " + str(scanNum) + " from " + dirName)
-    dirGen = os.walk("./" + dirName)
-    dirs = [dir for dir in dirGen]
-    labelFile = open("./labels.csv")
-    idLabels = parseLabels(labelFile)
-    
-    patientData = []
-    fileCount = 0
-    currDir = os.path.basename(dirs[scanNum][0])
-    dataList = []
-    #Add each array to a list
-    for image in dirs[scanNum][2]:
-        imageHandle = dicom.read_file(dirs[scanNum][0] + '/' + image)
-        imgData = imageHandle.pixel_array
-        dataList.append(imageHandle.pixel_array)
-            
-        
-        #Add the 3d array of all images from a patient to the list
-        patientData = numpy.stack(dataList).astype(float)
-    patientData -= numpy.mean(patientData)
-    label = -1
-    try:
-        label = idLabels[currDir]
-    except:
-        label = -1
-    return patientData, label 
-
-def readValidationImages():
-    labelFile = open("./labels.csv")
-    idLabels = parseLabels(labelFile)
-    dirs = os.walk("./validation")
-    #Skip the directory itself, only look at subdirectories
-    dirs.next()
-    
-    labels = []
-    patientData = []
-    for directory in dirs:
-        currDir = os.path.basename(directory[0])
-	if currDir in idLabels:
-            dataList = []
-            #Add each array to a list
-            for image in directory[2]:
-                if image == "desktop.ini":
-                    continue
-                imageHandle = dicom.read_file(directory[0] + '/' + image)
-                imgData = imageHandle.pixel_array.astype(float)
-                dataList.append(imageHandle.pixel_array)
-            
-            #Preprocess all images from the patient to set a zero mean
-            dataList -= numpy.mean(dataList)
-        
-            #Add the 3d array of all images from a patient to the list
-            patientData.append(numpy.stack(dataList))
-            labels.append(idLabels[currDir])
-    return patientData, labels
 
 def main():
     parser = argparse.ArgumentParser(description = "Convolutional Neural Net")
@@ -151,21 +43,23 @@ def main():
     numFilters1 = 2
     p1Factor = 4
     p1Depth = 2
-    learnVal = numpy.array(.01)
+    learnVal = numpy.array(1)
     learnRate = theano.shared(learnVal, 'learnRate')
     
     #Load the shared variables if possible, otherwise initialize them
     try:
-        f1File = open("F1_smallPooled.save" , "rb")
+        print("Loading weight data")
+        f1File = open("F1_relu.save" , "rb")
         F1 = pickle.load(f1File)
         f1File.close()
-        b1File = open("b1_smallPooled.save", "rb")
+        b1File = open("b1_relu.save", "rb")
         b1 = pickle.load(f1File)
         b1File.close()
     except:
-        f1Arr = numpy.random.uniform(.01,.1,(numFilters1,1,f1Depth,f1size,f1size))
+        print("Save file not found, generating new weights")
+        f1Arr = numpy.ones((numFilters1,1,f1Depth,f1size,f1size)) * .00001
         F1 = theano.shared(f1Arr, name = "F1")
-        bias1 = numpy.array(.1)
+        bias1 = numpy.array(.00001)
         b1 = theano.shared(bias1, name = "b1")
     
     #Output = batches x 512 - (f1size-1) x 512 - (f1size-1) x endSize/f1Depth - 1 x channels
@@ -182,16 +76,16 @@ def main():
     pool2Depth = 5
     
     try:
-        f2File = open("F2_smallPooled.save", "rb")
+        f2File = open("F2_relu.save", "rb")
         F2 = pickle.load(f2File)
         f2File.close()
-        b2File = open("b2_smallPooled.save", "rb")
+        b2File = open("b2_relu.save", "rb")
         b2 = pickle.load(b2File)
         b2File.close()
     except:
-        f2Arr = numpy.random.uniform(.01,.1,(numFilters2, numFilters1, f2Depth, f2size, f2size))
+        f2Arr = numpy.ones((numFilters2, numFilters1, f2Depth, f2size, f2size)) * .00001
         F2 = theano.shared(f2Arr, name = "F2")
-        bias2 = numpy.array(.1)
+        bias2 = numpy.array(.00001)
         b2 = theano.shared(bias2, name = "b2")
     conv2 = nnet.relu(nnet.conv3d(pool1, F2) + b2, .01)
     pool2 = pool.pool_3d(conv2, (pool2Depth,pool2Factor,pool2Factor), ignore_border = True)
@@ -205,16 +99,16 @@ def main():
     #Layer 3
     print("Compiling layer 3")
     try:
-        b3File = open("b3_smallPooled.save", "rb")
+        b3File = open("b3_relu.save", "rb")
         b3 = pickle.load(b3File)
         b3File.close()
-        w3File = open("w3_smallPooled.save", "rb")
+        w3File = open("w3_relu.save", "rb")
         w3 = pickle.load(w3File)
         w3File.close()
     except:
-        b3arr = numpy.array(.1)
+        b3arr = numpy.array(.00001)
         b3 = theano.shared(b3arr, name = "b3")
-        w3arr = numpy.random.uniform(.01,.1,(convOutLen, convOutLen // numFilters2))
+        w3arr = numpy.ones((convOutLen, convOutLen // numFilters2)) * .00001
         w3 = theano.shared(w3arr, name = "w3")
     hidden3 = theano.dot(pool2.flatten(), w3) + b3
     layer3 = theano.function([Img], hidden3)
@@ -222,16 +116,16 @@ def main():
     #Layer 4
     print("Compiling layer 4")
     try:
-        w4File = open("w4_smallPooled.save", "rb")
+        w4File = open("w4_relu.save", "rb")
         w4 = pickle.load(w4File)
         w4File.close()
-        b4File = open("b4_smallPooled.save", "rb")
+        b4File = open("b4_relu.save", "rb")
         b4 = pickle.load(b4File)
         b4File.close()
     except:
-        w4arr = numpy.random.uniform(.01,1,(convOutLen // numFilters2))
+        w4arr = numpy.ones((convOutLen // numFilters2)) * .00001
         w4 = theano.shared(w4arr, name = "w4")
-        b4arr = numpy.array(.1)
+        b4arr = numpy.array(.00001)
         b4 = theano.shared(b4arr, name = "b4")
     hidden4In = nnet.relu(hidden3, .01)
     hidden4 = theano.dot(hidden4In, w4) + b4
@@ -250,7 +144,7 @@ def main():
     b2Grad = T.grad(error, b2)
     b3Grad = T.grad(error, b3)
     b4Grad = T.grad(error, b4)
-    
+    printGrad = theano.function([Img, Lab], F1Grad)    
     validate = theano.function([Img, Lab], error)
     train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRate),
              (F2, F2 - F2Grad * learnRate),
@@ -271,7 +165,7 @@ def main():
         posPatientCount = imageCount("posTrain")
         negPatientCount = imageCount("negTrain")
         
-        logFile = open("smallPoolCNNLog.txt", "w")
+        logFile = open("reluCNNLog.txt", "w")
         
         bestErr = float("inf")
         
@@ -288,8 +182,9 @@ def main():
             posImage = maxPool(posPatientData, endSize)
             negImage = maxPool(negPatientData, endSize)
             print("Pooling complete")
-            #print(layer2(posImage.reshape(1,1,endSize,512,512)).shape)
-            print("Training...")
+	    #print(printGrad(posImage.reshape(1,1,endSize,512,512), int(posLabel)))
+	    #print(layer4(posImage.reshape(1,1,endSize,512,512)))
+	    print("Training...")
             posErr = train(posImage.reshape(1,1,endSize,512,512), int(posLabel))
             negErr = train(negImage.reshape(1,1,endSize,512,512), int(negLabel))
             
@@ -313,18 +208,18 @@ def main():
                 if  currErr < bestErr:
                     bestErr = currErr
                     print("Saving weight data")
-                    iterationFile = open("smallPoolCNNErrorIteration.txt", "w+")
+                    iterationFile = open("reluCNNErrorIteration.txt", "w+")
                     iterationFile.write(str(i) + "\n" + str(bestErr))
                     iterationFile.close()
                     try:
-                        f1File = open("F1_smallPooled.save" , "wb")
-                        b1File = open("b1_smallPooled.save" , "wb")
-                        f2File = open("F2_smallPooled.save", "wb")
-                        b2File = open("b2_smallPooled.save", "wb")
-                        w3File = open("w3_smallPooled.save", "wb")
-                        b3File = open("b3_smallPooled.save", "wb")
-                        w4File = open("w4_smallPooled.save", "wb")
-                        b4File = open("b4_smallPooled.save", "wb")
+                        f1File = open("F1_relu.save" , "wb")
+                        b1File = open("b1_relu.save" , "wb")
+                        f2File = open("F2_relu.save", "wb")
+                        b2File = open("b2_relu.save", "wb")
+                        w3File = open("w3_relu.save", "wb")
+                        b3File = open("b3_relu.save", "wb")
+                        w4File = open("w4_relu.save", "wb")
+                        b4File = open("b4_relu.save", "wb")
             
                         pickle.dump(F1, f1File)
                         pickle.dump(b1, b1File)
@@ -361,7 +256,7 @@ def main():
                 int(label))
             print(totalErr)
         
-        outFile = open("smallPoolTestAccuracy.txt", 'w')
+        outFile = open("reluTestAccuracy.txt", 'w')
 
         accuracy = totalErr / testCount
         outFile.write("Accuracy: " + str(accuracy))

@@ -156,6 +156,7 @@ def main():
     
     #Load the shared variables if possible, otherwise initialize them
     try:
+        print("Loading weights...")
         f1File = open("F1_smallPooled.save" , "rb")
         F1 = pickle.load(f1File)
         f1File.close()
@@ -163,9 +164,10 @@ def main():
         b1 = pickle.load(f1File)
         b1File.close()
     except:
-        f1Arr = numpy.random.randn(numFilters1,1,f1Depth,f1size,f1size) 
-        F1 = theano.shared(f1Arr, name = "F1")
-        bias1 = numpy.random.randn()
+        print("Save file not found, generating new weights")
+        f1Arr = numpy.random.uniform(-.01,.01,(numFilters1,1,f1Depth,f1size,f1size)) 
+	F1 = theano.shared(f1Arr, name = "F1")
+        bias1 = numpy.random.uniform(-.01,.01)
         b1 = theano.shared(bias1, name = "b1")
     
     #Output = batches x 512 - (f1size-1) x 512 - (f1size-1) x endSize/f1Depth - 1 x channels
@@ -189,9 +191,9 @@ def main():
         b2 = pickle.load(b2File)
         b2File.close()
     except:
-        f2Arr = numpy.random.randn(numFilters2, numFilters1, f2Depth, f2size, f2size)
+        f2Arr = numpy.random.uniform(-.01,.01,(numFilters2, numFilters1, f2Depth, f2size, f2size))
         F2 = theano.shared(f2Arr, name = "F2")
-        bias2 = numpy.random.randn()
+        bias2 = numpy.random.uniform(-.01,.01)
         b2 = theano.shared(bias2, name = "b2")
     conv2 = nnet.sigmoid(nnet.conv3d(pool1, F2) + b2)
     pool2 = pool.pool_3d(conv2, (pool2Depth,pool2Factor,pool2Factor), ignore_border = True)
@@ -212,9 +214,9 @@ def main():
         w3 = pickle.load(w3File)
         w3File.close()
     except:
-        b3arr = numpy.random.randn()
+        b3arr = numpy.random.uniform(-.01,.01)
         b3 = theano.shared(b3arr, name = "b3")
-        w3arr = numpy.random.randn(convOutLen, convOutLen // numFilters2)
+        w3arr = numpy.random.uniform(-.01,.01,(convOutLen, convOutLen // numFilters2))
         w3 = theano.shared(w3arr, name = "w3")
     hidden3 = theano.dot(pool2.flatten(), w3) + b3
     layer3 = theano.function([Img], hidden3)
@@ -229,9 +231,9 @@ def main():
         b4 = pickle.load(b4File)
         b4File.close()
     except:
-        w4arr = numpy.random.randn(convOutLen // numFilters2)
+        w4arr = numpy.random.uniform(-.01, .01,(convOutLen // numFilters2)) 
         w4 = theano.shared(w4arr, name = "w4")
-        b4arr = numpy.random.randn()
+        b4arr = numpy.random.uniform(-.01,.01)
         b4 = theano.shared(b4arr, name = "b4")
     hidden4In = nnet.sigmoid(hidden3)
     hidden4 = theano.dot(hidden4In, w4) + b4
@@ -251,6 +253,7 @@ def main():
     b3Grad = T.grad(error, b3)
     b4Grad = T.grad(error, b4)
     
+    gradPrint = theano.function([Img, Lab], F1Grad)
     validate = theano.function([Img, Lab], error)
     train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRate),
              (F2, F2 - F2Grad * learnRate),
@@ -290,7 +293,7 @@ def main():
             print("Pooling complete")
             #print(layer2(posImage.reshape(1,1,endSize,512,512)).shape)
             print("Training...")
-            posErr = train(posImage.reshape(1,1,endSize,512,512), int(posLabel))
+	    posErr = train(posImage.reshape(1,1,endSize,512,512), int(posLabel))
             negErr = train(negImage.reshape(1,1,endSize,512,512), int(negLabel))
             
         
