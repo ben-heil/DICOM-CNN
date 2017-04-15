@@ -38,9 +38,9 @@ def main():
     
     #Layer 1
     print("Compiling layer 1")
-    f1size = 5
+    f1size = 3
     f1Depth = 3
-    numFilters1 = 2
+    numFilters1 = 16
     p1Factor = 4
     p1Depth = 2
     learnVal = numpy.array(.01)
@@ -61,15 +61,15 @@ def main():
         b1 = theano.shared(bias1, name = "b1")
     
     #Output = batches x 512 - (f1size-1) x 512 - (f1size-1) x endSize/f1Depth - 1 x channels
-    conv1 = nnet.sigmoid(nnet.conv3d(pool0, F1) + b1)
+    conv1 = T.tanh(nnet.conv3d(pool0, F1) + b1)
     pool1 = pool.pool_3d(conv1, (p1Depth,p1Factor,p1Factor), ignore_border = True)
     layer1 = theano.function([Img], pool1)
     
     #Layer 2
     print("Compiling layer 2")
-    f2size = 10
+    f2size = 3
     f2Depth = 2
-    numFilters2 = 2 
+    numFilters2 = 32 
     pool2Factor = 4
     pool2Depth = 5
     
@@ -85,7 +85,7 @@ def main():
         F2 = theano.shared(f2Arr, name = "F2")
         bias2 = numpy.random.randn()
         b2 = theano.shared(bias2, name = "b2")
-    conv2 = nnet.sigmoid(nnet.conv3d(pool1, F2) + b2)
+    conv2 = T.tanh(nnet.conv3d(pool1, F2) + b2)
     pool2 = pool.pool_3d(conv2, (pool2Depth,pool2Factor,pool2Factor), ignore_border = True)
     layer2 = theano.function([Img], pool2)
     
@@ -125,7 +125,7 @@ def main():
         w4 = theano.shared(w4arr, name = "w4")
         b4arr = numpy.random.randn()
         b4 = theano.shared(b4arr, name = "b4")
-    hidden4In = nnet.sigmoid(hidden3)
+    hidden4In = T.tanh(hidden3)
     hidden4 = theano.dot(hidden4In, w4) + b4
     layer4 = theano.function([Img], hidden4)
     
