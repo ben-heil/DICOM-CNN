@@ -1,3 +1,4 @@
+#Like the poolCNN, except with smaller filter sizes
 
 from __future__ import division
 import math
@@ -15,7 +16,6 @@ import pickle
 import argparse
 from utilityFunctions import parseLabels, maxPool, imageCount, readScan
 from utilityFunctions import readValidationImages
-
 
 def main():
     parser = argparse.ArgumentParser(description = "Convolutional Neural Net")
@@ -43,21 +43,23 @@ def main():
     numFilters1 = 16
     p1Factor = 4
     p1Depth = 2
-    learnVal = numpy.array(.01)
+    learnVal = numpy.array(.005)
     learnRate = theano.shared(learnVal, 'learnRate')
     
     #Load the shared variables if possible, otherwise initialize them
     try:
-        f1File = open("F1_pooled.save" , "rb")
+        print("Loading weights...")
+        f1File = open("F1_pool.save" , "rb")
         F1 = pickle.load(f1File)
         f1File.close()
-        b1File = open("b1_pooled.save", "rb")
+        b1File = open("b1_pool.save", "rb")
         b1 = pickle.load(b1File)
         b1File.close()
     except:
-        f1Arr = numpy.random.randn(numFilters1,1,f1Depth,f1size,f1size) 
-        F1 = theano.shared(f1Arr, name = "F1")
-        bias1 = numpy.random.randn()
+        print("Save file not found, generating new weights")
+        f1Arr = numpy.random.uniform(-.01,.01,(numFilters1,1,f1Depth,f1size,f1size)) 
+	F1 = theano.shared(f1Arr, name = "F1")
+        bias1 = numpy.random.uniform(-.01,.01)
         b1 = theano.shared(bias1, name = "b1")
     
     #Output = batches x 512 - (f1size-1) x 512 - (f1size-1) x endSize/f1Depth - 1 x channels
@@ -68,22 +70,22 @@ def main():
     #Layer 2
     print("Compiling layer 2")
     f2size = 3
-    f2Depth = 2
-    numFilters2 = 32 
+    f2Depth = 3
+    numFilters2 = 32
     pool2Factor = 4
     pool2Depth = 5
     
     try:
-        f2File = open("F2_pooled.save", "rb")
+        f2File = open("F2_pool.save", "rb")
         F2 = pickle.load(f2File)
         f2File.close()
-        b2File = open("b2_pooled.save", "rb")
+        b2File = open("b2_pool.save", "rb")
         b2 = pickle.load(b2File)
         b2File.close()
     except:
-        f2Arr = numpy.random.randn(numFilters2, numFilters1, f2Depth, f2size, f2size)
+        f2Arr = numpy.random.uniform(-.01,.01,(numFilters2, numFilters1, f2Depth, f2size, f2size))
         F2 = theano.shared(f2Arr, name = "F2")
-        bias2 = numpy.random.randn()
+        bias2 = numpy.random.uniform(-.01,.01)
         b2 = theano.shared(bias2, name = "b2")
     conv2 = T.tanh(nnet.conv3d(pool1, F2) + b2)
     pool2 = pool.pool_3d(conv2, (pool2Depth,pool2Factor,pool2Factor), ignore_border = True)
@@ -97,16 +99,16 @@ def main():
     #Layer 3
     print("Compiling layer 3")
     try:
-        b3File = open("b3_pooled.save", "rb")
+        b3File = open("b3_pool.save", "rb")
         b3 = pickle.load(b3File)
         b3File.close()
-        w3File = open("w3_pooled.save", "rb")
+        w3File = open("w3_pool.save", "rb")
         w3 = pickle.load(w3File)
         w3File.close()
     except:
-        b3arr = numpy.random.randn()
+        b3arr = numpy.random.uniform(-.01,.01)
         b3 = theano.shared(b3arr, name = "b3")
-        w3arr = numpy.random.randn(convOutLen, convOutLen // numFilters2)
+        w3arr = numpy.random.uniform(-.01,.01,(convOutLen, convOutLen // numFilters2))
         w3 = theano.shared(w3arr, name = "w3")
     hidden3 = theano.dot(pool2.flatten(), w3) + b3
     layer3 = theano.function([Img], hidden3)
@@ -114,16 +116,16 @@ def main():
     #Layer 4
     print("Compiling layer 4")
     try:
-        w4File = open("w4_pooled.save", "rb")
+        w4File = open("w4_pool.save", "rb")
         w4 = pickle.load(w4File)
         w4File.close()
-        b4File = open("b4_pooled.save", "rb")
+        b4File = open("b4_pool.save", "rb")
         b4 = pickle.load(b4File)
         b4File.close()
     except:
-        w4arr = numpy.random.randn(convOutLen // numFilters2)
+        w4arr = numpy.random.uniform(-.0001, .0001,(convOutLen // numFilters2)) 
         w4 = theano.shared(w4arr, name = "w4")
-        b4arr = numpy.random.randn()
+        b4arr = numpy.random.uniform(-.01,.01)
         b4 = theano.shared(b4arr, name = "b4")
     hidden4In = T.tanh(hidden3)
     hidden4 = theano.dot(hidden4In, w4) + b4
@@ -143,6 +145,7 @@ def main():
     b3Grad = T.grad(error, b3)
     b4Grad = T.grad(error, b4)
     
+    gradPrint = theano.function([Img, Lab], F1Grad)
     validate = theano.function([Img, Lab], error)
     train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRate),
              (F2, F2 - F2Grad * learnRate),
@@ -159,7 +162,13 @@ def main():
     if args.mode.lower() == "train":
         print("Reading validation images")
         valImages, valLabels = readValidationImages()
-        bestErr = float("inf")
+	try:
+            errFile = open("poolCNNErrorIteration.txt")
+	    #Skip first line
+	    errFile.readline()
+            bestErr = float(errFile.readline())
+	except:
+	    bestErr = float("inf")
         posPatientCount = imageCount("posTrain")
         negPatientCount = imageCount("negTrain")
         
@@ -167,8 +176,8 @@ def main():
         
         bestErr = float("inf")
         
-        for i in range(1000):
-            print("Iteration " + str(i))
+        for i in range(10000):
+            print(i)
             patientNum = int(math.floor(random.random() * posPatientCount ) + 1)
             posPatientData, posLabel = readScan(patientNum, "posTrain")
             patientNum = int(math.floor(random.random() * negPatientCount ) + 1)
@@ -182,12 +191,12 @@ def main():
             print("Pooling complete")
             #print(layer2(posImage.reshape(1,1,endSize,512,512)).shape)
             print("Training...")
-            posErr = train(posImage.reshape(1,1,endSize,512,512), int(posLabel))
+	    posErr = train(posImage.reshape(1,1,endSize,512,512), int(posLabel))
             negErr = train(negImage.reshape(1,1,endSize,512,512), int(negLabel))
-            
         
             logFile.write("Pos err = " + str(posErr))
             logFile.write("\tNeg err = " + str(negErr) + "\n")
+	    print("Sum err = " + str(posErr + negErr))
             print("Pos err = " + str(posErr))
             print("Neg err = " + str(negErr))
         
@@ -209,14 +218,14 @@ def main():
                     iterationFile.write(str(i) + "\n" + str(bestErr))
                     iterationFile.close()
                     try:
-                        f1File = open("F1_pooled.save" , "wb")
-                        b1File = open("b1_pooled.save" , "wb")
-                        f2File = open("F2_pooled.save", "wb")
-                        b2File = open("b2_pooled.save", "wb")
-                        w3File = open("w3_pooled.save", "wb")
-                        b3File = open("b3_pooled.save", "wb")
-                        w4File = open("w4_pooled.save", "wb")
-                        b4File = open("b4_pooled.save", "wb")
+                        f1File = open("F1_pool.save" , "wb")
+                        b1File = open("b1_pool.save" , "wb")
+                        f2File = open("F2_pool.save", "wb")
+                        b2File = open("b2_pool.save", "wb")
+                        w3File = open("w3_pool.save", "wb")
+                        b3File = open("b3_pool.save", "wb")
+                        w4File = open("w4_pool.save", "wb")
+                        b4File = open("b4_pool.save", "wb")
             
                         pickle.dump(F1, f1File)
                         pickle.dump(b1, b1File)
@@ -259,17 +268,22 @@ def main():
         outFile.write("Accuracy: " + str(accuracy))
         outFile.close()
 
+
     if args.mode.lower() == "visualize":
-        image, label = readScan(1, "test")
-	print(image.shape)
+        image, label = readScan(2, "test")
+        print(image.shape)
         print(label)
-	image = maxPool(image, endSize)
+        image = maxPool(image, endSize)
         result = layer1(image.reshape(1,1,endSize,512,512))
-        plt.subplot(1,2,1)
-        print(result.shape)	
-	plt.imshow(image[0])
-	plt.subplot(1,2,2)
-	plt.imshow(result[0][0][0])
+        plt.subplot(2,2,1)
+        print(result.shape)
+        plt.imshow(image[40])
+        plt.subplot(2,2,2)
+        plt.imshow(result[0][1][15])
+        plt.subplot(2,2,3)
+        plt.imshow(result[0][2][15])
+        plt.subplot(2,2,4)
+        plt.imshow(result[0][3][15])
 	plt.show()
 
 if __name__ == "__main__":
