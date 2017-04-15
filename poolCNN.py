@@ -52,7 +52,7 @@ def main():
         F1 = pickle.load(f1File)
         f1File.close()
         b1File = open("b1_pooled.save", "rb")
-        b1 = pickle.load(f1File)
+        b1 = pickle.load(b1File)
         b1File.close()
     except:
         f1Arr = numpy.random.randn(numFilters1,1,f1Depth,f1size,f1size) 
@@ -168,7 +168,7 @@ def main():
         bestErr = float("inf")
         
         for i in range(1000):
-            print(i)
+            print("Iteration " + str(i))
             patientNum = int(math.floor(random.random() * posPatientCount ) + 1)
             posPatientData, posLabel = readScan(patientNum, "posTrain")
             patientNum = int(math.floor(random.random() * negPatientCount ) + 1)
@@ -258,6 +258,19 @@ def main():
         accuracy = totalErr / testCount
         outFile.write("Accuracy: " + str(accuracy))
         outFile.close()
+
+    if args.mode.lower() == "visualize":
+        image, label = readScan(1, "test")
+	print(image.shape)
+        print(label)
+	image = maxPool(image, endSize)
+        result = layer1(image.reshape(1,1,endSize,512,512))
+        plt.subplot(1,2,1)
+        print(result.shape)	
+	plt.imshow(image[0])
+	plt.subplot(1,2,2)
+	plt.imshow(result[0][0][0])
+	plt.show()
 
 if __name__ == "__main__":
     main()

@@ -187,7 +187,7 @@ def main():
 	    print("Training...")
             posErr = train(posImage.reshape(1,1,endSize,512,512), int(posLabel))
             negErr = train(negImage.reshape(1,1,endSize,512,512), int(negLabel))
-            
+            print("Sum of errors: " +  str(posErr + negErr)) 
         
             logFile.write("Pos err = " + str(posErr))
             logFile.write("\tNeg err = " + str(negErr) + "\n")

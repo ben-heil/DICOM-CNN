@@ -40,19 +40,19 @@ def main():
     print("Compiling layer 1")
     f1size = 3
     f1Depth = 3
-    numFilters1 = 2
+    numFilters1 = 8
     p1Factor = 4
     p1Depth = 2
-    learnVal = numpy.array(.01)
+    learnVal = numpy.array(.005)
     learnRate = theano.shared(learnVal, 'learnRate')
     
     #Load the shared variables if possible, otherwise initialize them
     try:
         print("Loading weights...")
-        f1File = open("F1_smallPooled.save" , "rb")
+        f1File = open("F1_manyPooled.save" , "rb")
         F1 = pickle.load(f1File)
         f1File.close()
-        b1File = open("b1_smallPooled.save", "rb")
+        b1File = open("b1_manyPooled.save", "rb")
         b1 = pickle.load(b1File)
         b1File.close()
     except:
@@ -63,7 +63,7 @@ def main():
         b1 = theano.shared(bias1, name = "b1")
     
     #Output = batches x 512 - (f1size-1) x 512 - (f1size-1) x endSize/f1Depth - 1 x channels
-    conv1 = nnet.sigmoid(nnet.conv3d(pool0, F1) + b1)
+    conv1 = T.tanh(nnet.conv3d(pool0, F1) + b1)
     pool1 = pool.pool_3d(conv1, (p1Depth,p1Factor,p1Factor), ignore_border = True)
     layer1 = theano.function([Img], pool1)
     
@@ -71,15 +71,15 @@ def main():
     print("Compiling layer 2")
     f2size = 3
     f2Depth = 3
-    numFilters2 = 2 
+    numFilters2 = 8 
     pool2Factor = 4
     pool2Depth = 5
     
     try:
-        f2File = open("F2_smallPooled.save", "rb")
+        f2File = open("F2_manyPooled.save", "rb")
         F2 = pickle.load(f2File)
         f2File.close()
-        b2File = open("b2_smallPooled.save", "rb")
+        b2File = open("b2_manyPooled.save", "rb")
         b2 = pickle.load(b2File)
         b2File.close()
     except:
@@ -87,7 +87,7 @@ def main():
         F2 = theano.shared(f2Arr, name = "F2")
         bias2 = numpy.random.uniform(-.01,.01)
         b2 = theano.shared(bias2, name = "b2")
-    conv2 = nnet.sigmoid(nnet.conv3d(pool1, F2) + b2)
+    conv2 = T.tanh(nnet.conv3d(pool1, F2) + b2)
     pool2 = pool.pool_3d(conv2, (pool2Depth,pool2Factor,pool2Factor), ignore_border = True)
     layer2 = theano.function([Img], pool2)
     
@@ -99,10 +99,10 @@ def main():
     #Layer 3
     print("Compiling layer 3")
     try:
-        b3File = open("b3_smallPooled.save", "rb")
+        b3File = open("b3_manyPooled.save", "rb")
         b3 = pickle.load(b3File)
         b3File.close()
-        w3File = open("w3_smallPooled.save", "rb")
+        w3File = open("w3_manyPooled.save", "rb")
         w3 = pickle.load(w3File)
         w3File.close()
     except:
@@ -116,18 +116,18 @@ def main():
     #Layer 4
     print("Compiling layer 4")
     try:
-        w4File = open("w4_smallPooled.save", "rb")
+        w4File = open("w4_manyPooled.save", "rb")
         w4 = pickle.load(w4File)
         w4File.close()
-        b4File = open("b4_smallPooled.save", "rb")
+        b4File = open("b4_manyPooled.save", "rb")
         b4 = pickle.load(b4File)
         b4File.close()
     except:
-        w4arr = numpy.random.uniform(-.01, .01,(convOutLen // numFilters2)) 
+        w4arr = numpy.random.uniform(-.0001, .0001,(convOutLen // numFilters2)) 
         w4 = theano.shared(w4arr, name = "w4")
         b4arr = numpy.random.uniform(-.01,.01)
         b4 = theano.shared(b4arr, name = "b4")
-    hidden4In = nnet.sigmoid(hidden3)
+    hidden4In = T.tanh(hidden3)
     hidden4 = theano.dot(hidden4In, w4) + b4
     layer4 = theano.function([Img], hidden4)
     
@@ -162,15 +162,21 @@ def main():
     if args.mode.lower() == "train":
         print("Reading validation images")
         valImages, valLabels = readValidationImages()
-        bestErr = float("inf")
+	try:
+            errFile = open("manyPoolCNNErrorIteration.txt")
+	    #Skip first line
+	    errFile.readline()
+            bestErr = float(errFile.readline())
+	except:
+	    bestErr = float("inf")
         posPatientCount = imageCount("posTrain")
         negPatientCount = imageCount("negTrain")
         
-        logFile = open("smallPoolCNNLog.txt", "w")
+        logFile = open("manyPoolCNNLog.txt", "w")
         
         bestErr = float("inf")
         
-        for i in range(1000):
+        for i in range(10000):
             print(i)
             patientNum = int(math.floor(random.random() * posPatientCount ) + 1)
             posPatientData, posLabel = readScan(patientNum, "posTrain")
@@ -208,18 +214,18 @@ def main():
                 if  currErr < bestErr:
                     bestErr = currErr
                     print("Saving weight data")
-                    iterationFile = open("smallPoolCNNErrorIteration.txt", "w+")
+                    iterationFile = open("manyPoolCNNErrorIteration.txt", "w+")
                     iterationFile.write(str(i) + "\n" + str(bestErr))
                     iterationFile.close()
                     try:
-                        f1File = open("F1_smallPooled.save" , "wb")
-                        b1File = open("b1_smallPooled.save" , "wb")
-                        f2File = open("F2_smallPooled.save", "wb")
-                        b2File = open("b2_smallPooled.save", "wb")
-                        w3File = open("w3_smallPooled.save", "wb")
-                        b3File = open("b3_smallPooled.save", "wb")
-                        w4File = open("w4_smallPooled.save", "wb")
-                        b4File = open("b4_smallPooled.save", "wb")
+                        f1File = open("F1_manyPooled.save" , "wb")
+                        b1File = open("b1_manyPooled.save" , "wb")
+                        f2File = open("F2_manyPooled.save", "wb")
+                        b2File = open("b2_manyPooled.save", "wb")
+                        w3File = open("w3_manyPooled.save", "wb")
+                        b3File = open("b3_manyPooled.save", "wb")
+                        w4File = open("w4_manyPooled.save", "wb")
+                        b4File = open("b4_manyPooled.save", "wb")
             
                         pickle.dump(F1, f1File)
                         pickle.dump(b1, b1File)
@@ -256,11 +262,29 @@ def main():
                 int(label))
             print(totalErr)
         
-        outFile = open("smallPoolTestAccuracy.txt", 'w')
+        outFile = open("manyPoolTestAccuracy.txt", 'w')
 
         accuracy = totalErr / testCount
         outFile.write("Accuracy: " + str(accuracy))
         outFile.close()
+
+
+    if args.mode.lower() == "visualize":
+        image, label = readScan(2, "test")
+        print(image.shape)
+        print(label)
+        image = maxPool(image, endSize)
+        result = layer1(image.reshape(1,1,endSize,512,512))
+        plt.subplot(2,2,1)
+        print(result.shape)
+        plt.imshow(image[40])
+        plt.subplot(2,2,2)
+        plt.imshow(result[0][1][15])
+        plt.subplot(2,2,3)
+        plt.imshow(result[0][2][15])
+        plt.subplot(2,2,4)
+        plt.imshow(result[0][3][15])
+	plt.show()
 
 if __name__ == "__main__":
     main()
