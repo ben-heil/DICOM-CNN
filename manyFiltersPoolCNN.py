@@ -28,10 +28,10 @@ def main():
     
     Img = tensor5(name="Img")
     Lab = T.dscalar()
-    endSize = 60 
+    endSize = 100 
     
     #Layer 0 (shrink images)
-    p0Factor = 4
+    p0Factor = 1
     
     pool0 = pool.pool_2d(Img, (p0Factor, p0Factor))
     layer0 = theano.function([Img], pool0)
@@ -40,10 +40,10 @@ def main():
     print("Compiling layer 1")
     f1size = 3
     f1Depth = 3
-    numFilters1 = 8
-    p1Factor = 4
+    numFilters1 = 16
+    p1Factor = 2
     p1Depth = 2
-    learnVal = numpy.array(.005)
+    learnVal = numpy.array(.05)
     learnRate = theano.shared(learnVal, 'learnRate')
     
     #Load the shared variables if possible, otherwise initialize them
@@ -59,20 +59,23 @@ def main():
         print("Save file not found, generating new weights")
         f1Arr = numpy.random.uniform(-.01,.01,(numFilters1,1,f1Depth,f1size,f1size)) 
 	F1 = theano.shared(f1Arr, name = "F1")
-        bias1 = numpy.random.uniform(-.01,.01)
+        bias1 = numpy.ones((numFilters1,1))
+        print(bias1.shape)
         b1 = theano.shared(bias1, name = "b1")
     
-    #Output = batches x 512 - (f1size-1) x 512 - (f1size-1) x endSize/f1Depth - 1 x channels
-    conv1 = T.tanh(nnet.conv3d(pool0, F1) + b1)
+    #Output = batches x 64 - (f1size-1) x 64 - (f1size-1) x endSize/f1Depth - 1 x channels
+    #Dimshuffle allows the bias to be broadcast along the filter dimension
+    conv1 = T.tanh(nnet.conv3d(pool0, F1) + b1.dimshuffle(1,0,'x','x','x'))
     pool1 = pool.pool_3d(conv1, (p1Depth,p1Factor,p1Factor), ignore_border = True)
     layer1 = theano.function([Img], pool1)
+    layer1PrePool = theano.function([Img], conv1)
     
     #Layer 2
     print("Compiling layer 2")
     f2size = 3
-    f2Depth = 3
-    numFilters2 = 8 
-    pool2Factor = 4
+    f2Depth = 5
+    numFilters2 = 16 
+    pool2Factor = 2
     pool2Depth = 5
     
     try:
@@ -85,19 +88,25 @@ def main():
     except:
         f2Arr = numpy.random.uniform(-.01,.01,(numFilters2, numFilters1, f2Depth, f2size, f2size))
         F2 = theano.shared(f2Arr, name = "F2")
-        bias2 = numpy.random.uniform(-.01,.01)
+        bias2 = numpy.ones((numFilters2,1))
+        print(bias2.shape)
+
         b2 = theano.shared(bias2, name = "b2")
-    conv2 = T.tanh(nnet.conv3d(pool1, F2) + b2)
+    conv2 = T.tanh(nnet.conv3d(pool1, F2) + b2.dimshuffle(1,0,'x','x','x'))
     pool2 = pool.pool_3d(conv2, (pool2Depth,pool2Factor,pool2Factor), ignore_border = True)
+    layer2PrePool = theano.function([Img], conv2)
     layer2 = theano.function([Img], pool2)
     
     #Calculate the size of the output of the second convolutional layer
-    convOutLen = (((512//p0Factor - f1size) //p1Factor + 1) - f2size) // pool2Factor 
-    convOutDepth = (((endSize -f1Depth) // p1Depth + 1) - f2Depth) //pool2Depth 
+    convOutLen = (((64//p0Factor - f1size) //p1Factor + 1) - f2size) // pool2Factor 
+    print(convOutLen)
+    convOutDepth = ((((endSize -f1Depth) // p1Depth + 1) - f2Depth) //pool2Depth) + 1 
     convOutLen = convOutLen * convOutLen * numFilters2 * convOutDepth
-    
+    print(convOutDepth)
+    print(numFilters2)
     #Layer 3
     print("Compiling layer 3")
+    layer3Size = 100
     try:
         b3File = open("b3_manyPooled.save", "rb")
         b3 = pickle.load(b3File)
@@ -106,11 +115,11 @@ def main():
         w3 = pickle.load(w3File)
         w3File.close()
     except:
-        b3arr = numpy.random.uniform(-.01,.01)
+        b3arr = numpy.ones((layer3Size,1))
         b3 = theano.shared(b3arr, name = "b3")
-        w3arr = numpy.random.uniform(-.01,.01,(convOutLen, convOutLen // numFilters2))
+        w3arr = numpy.random.uniform(-.01,.01,(convOutLen, layer3Size))
         w3 = theano.shared(w3arr, name = "w3")
-    hidden3 = theano.dot(pool2.flatten(), w3) + b3
+    hidden3 = T.tanh(theano.dot(w3.T,pool2.flatten()) + b3.T)
     layer3 = theano.function([Img], hidden3)
     
     #Layer 4
@@ -123,19 +132,28 @@ def main():
         b4 = pickle.load(b4File)
         b4File.close()
     except:
-        w4arr = numpy.random.uniform(-.0001, .0001,(convOutLen // numFilters2)) 
+        w4arr = numpy.random.uniform(-.0001, .0001,(layer3Size, 1)) 
         w4 = theano.shared(w4arr, name = "w4")
-        b4arr = numpy.random.uniform(-.01,.01)
+        b4arr = numpy.ones((1))
         b4 = theano.shared(b4arr, name = "b4")
-    hidden4In = T.tanh(hidden3)
-    hidden4 = theano.dot(hidden4In, w4) + b4
+    hidden3 = T.tanh(hidden3)
+    hidden4 = theano.dot(w4.T,hidden3.T) + b4
     layer4 = theano.function([Img], hidden4)
-    
+
+#    print(f1Arr.shape)
+#    print(bias1.shape)
+#    print(f2Arr.shape)
+#    print(bias2.shape)
+#    print(w3arr.shape)
+#    print(b3arr.shape)
+#    print(w4arr.shape)
+#    print(b4arr.shape)
+
     #Output layer
     print("Compiling training and validation functions")
     output = nnet.sigmoid(hidden4)
     
-    error = T.sqr(abs(output - Lab))
+    error = T.mean(T.sqr(abs(output - Lab)))
     F1Grad = T.grad(error, F1)
     F2Grad = T.grad(error, F2)
     w3Grad = T.grad(error, w3)
@@ -147,6 +165,7 @@ def main():
     
     gradPrint = theano.function([Img, Lab], F1Grad)
     validate = theano.function([Img, Lab], error)
+    classify = theano.function([Img, Lab], abs(T.round(output) - Lab))
     train = theano.function([Img, Lab], error, updates = [(F1, F1 - F1Grad * learnRate),
              (F2, F2 - F2Grad * learnRate),
              (w3, w3 - w3Grad * learnRate),
@@ -161,9 +180,9 @@ def main():
 
     if args.mode.lower() == "train":
         print("Reading validation images")
-        valImages, valLabels = readValidationImages()
+        valLabels, valImages = readValidationImages()
 	try:
-            errFile = open("manyPoolCNNErrorIteration.txt")
+            errFile = open("manyPoolCNNErrorIteration.txt", 'r')
 	    #Skip first line
 	    errFile.readline()
             bestErr = float(errFile.readline())
@@ -173,8 +192,6 @@ def main():
         negPatientCount = imageCount("negTrain")
         
         logFile = open("manyPoolCNNLog.txt", "w")
-        
-        bestErr = float("inf")
         
         for i in range(10000):
             print(i)
@@ -189,10 +206,26 @@ def main():
             posImage = maxPool(posPatientData, endSize)
             negImage = maxPool(negPatientData, endSize)
             print("Pooling complete")
-            #print(layer2(posImage.reshape(1,1,endSize,512,512)).shape)
+            
+#	    print(layer1PrePool(posImage.reshape(1,1,endSize,64,64)).shape)
+#	    print(layer1(posImage.reshape(1,1,endSize,64,64)).shape)
+#	    plt.imshow(layer1(posImage.reshape(1,1,endSize,64,64))[0][0][20])
+#	    plt.show()
+#	    plt.imshow(layer1(posImage.reshape(1,1,endSize,64,64))[0][1][20])
+#	    plt.show()
+#	    plt.imshow(layer1(posImage.reshape(1,1,endSize,64,64))[0][2][20])
+#	    plt.show()
+#	    plt.imshow(layer1(posImage.reshape(1,1,endSize,64,64))[0][3][20])
+#	    plt.show()
+#	    plt.imshow(layer1(posImage.reshape(1,1,endSize,64,64))[0][4][20])
+#	    plt.show()
+#	    print(layer2PrePool(posImage.reshape(1,1,endSize,64,64)).shape)
+#	    print(layer2(posImage.reshape(1,1,endSize,64,64)).shape)
+#            print(layer3(posImage.reshape(1,1,endSize,64,64)).shape)
+#            print(layer4(posImage.reshape(1,1,endSize,64,64)).shape)
             print("Training...")
-	    posErr = train(posImage.reshape(1,1,endSize,512,512), int(posLabel))
-            negErr = train(negImage.reshape(1,1,endSize,512,512), int(negLabel))
+	    posErr = train(posImage.reshape(1,1,endSize,64,64), int(posLabel))
+            negErr = train(negImage.reshape(1,1,endSize,64,64), int(negLabel))
         
             logFile.write("Pos err = " + str(posErr))
             logFile.write("\tNeg err = " + str(negErr) + "\n")
@@ -208,7 +241,7 @@ def main():
                     label = valLabels[j]
                     print("Pooling image " + str(j))
                     valImage = maxPool(valImages[j], endSize)
-                    currErr += validate(valImage.reshape(1,1,endSize,512,512), int(label))
+                    currErr += validate(valImage.reshape(1,1,endSize,64,64), int(label))
         
                 print("Validation err = " + str(currErr))
                 if  currErr < bestErr:
@@ -258,14 +291,14 @@ def main():
 	    print(image.shape)
             print(label)
 	    image = maxPool(image, endSize)
-            totalErr = totalErr + validate(image.reshape(1,1,endSize,512,512),
+            totalErr = totalErr + classify(image.reshape(1,1,endSize,64,64),
                 int(label))
             print(totalErr)
         
         outFile = open("manyPoolTestAccuracy.txt", 'w')
 
-        accuracy = totalErr / testCount
-        outFile.write("Accuracy: " + str(accuracy))
+        avgErr = totalErr / testCount
+        outFile.write("Accuracy: " + str(1 - avgErr))
         outFile.close()
 
 
@@ -274,7 +307,7 @@ def main():
         print(image.shape)
         print(label)
         image = maxPool(image, endSize)
-        result = layer1(image.reshape(1,1,endSize,512,512))
+        result = layer1(image.reshape(1,1,endSize,64,64))
         plt.subplot(2,2,1)
         print(result.shape)
         plt.imshow(image[40])
@@ -290,14 +323,14 @@ if __name__ == "__main__":
     main()
 
 
-#result = layer1(patientData[0][0].reshape(1,1,512,512))
+#result = layer1(patientData[0][0].reshape(1,1,64,64))
 #plt.subplot(1,3,1)
 #plt.imshow(patientData[0][1])
 #plt.gray()
 #plt.subplot(1,3,2)
 #plt.imshow(result[0][0])
 #plt.gray()
-#result = layer2(patientData[0][0].reshape(1,1,512,512))
+#result = layer2(patientData[0][0].reshape(1,1,64,64))
 #print(result[0][0].shape)
 #plt.subplot(1,3,3)
 #plt.imshow(result[0][0])

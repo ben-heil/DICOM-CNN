@@ -5,6 +5,8 @@ import dicom
 import math
 import random
 import numpy
+import matplotlib.pyplot as plt
+import time
 
 def parseLabels(labelFile):
     #Throw away header
@@ -32,7 +34,7 @@ def maxPool(images, endSize):
     extraCount = 0
     i = 0
     iteration = 0
-    output = numpy.zeros((endSize,512,512))
+    output = numpy.zeros((endSize,64,64))
 
     while iteration < endSize:
     #while i < images.shape[0]:
@@ -65,18 +67,52 @@ def readScan(scanNum, dirName):
     idLabels = parseLabels(labelFile)
 
     patientData = []
-    fileCount = 0
+    currDir = os.path.basename(dirs[scanNum][0])
+    images = []
+    #Add each array to a list
+    for image in dirs[scanNum][2]:
+	if image != "desktop.ini":
+            imageData = numpy.load(dirs[scanNum][0] + '/' + image)
+	    images.append(imageData)
+    
+    #Add the 3d array of all images from a patient to the list
+    patientData = numpy.stack(images).astype(float)
+    patientData -= patientData.mean()
+    patientData = patientData / patientData.max()
+    label = -1
+    try:
+        label = idLabels[currDir]
+    except:
+        label = -1
+    return patientData, label
+    
+
+def readDicomScan(scanNum, dirName):
+    print("Reading image " + str(scanNum) + " from " + dirName)
+    dirGen = os.walk("./" + dirName)
+    dirs = [dir for dir in dirGen]
+    labelFile = open("./labels.csv")
+    idLabels = parseLabels(labelFile)
+
+    patientData = []
     currDir = os.path.basename(dirs[scanNum][0])
     dataList = []
+    images = []
     #Add each array to a list
     for image in dirs[scanNum][2]:
         imageHandle = dicom.read_file(dirs[scanNum][0] + '/' + image)
-        imgData = imageHandle.pixel_array
-        dataList.append(imageHandle.pixel_array)
-
-
-        #Add the 3d array of all images from a patient to the list
-        patientData = numpy.stack(dataList).astype(float)
+	images.append(imageHandle)
+    
+    images.sort(key=lambda image: image.ImagePositionPatient)
+    for image in images:
+	plt.imshow(image.pixel_array)
+	plt.draw()
+	plt.pause(.01)
+	print("Figure")
+        dataList.append(image.pixel_array)
+    #Add the 3d array of all images from a patient to the list
+    patientData = numpy.stack(dataList).astype(float)
+    patientData = patientData / patientData.max()
     patientData -= numpy.mean(patientData)
     label = -1
     try:
@@ -94,22 +130,10 @@ def readValidationImages():
 
     labels = []
     patientData = []
-    for directory in dirs:
-        currDir = os.path.basename(directory[0])
-        if currDir in idLabels:
-            dataList = []
-            #Add each array to a list
-            for image in directory[2]:
-                if image == "desktop.ini":
-                    continue
-                imageHandle = dicom.read_file(directory[0] + '/' + image)
-                imgData = imageHandle.pixel_array.astype(float)
-                dataList.append(imageHandle.pixel_array)
+    
+    for i in range(1,imageCount("validation") + 1):
+        label, data = readScan(i, "validation")
+	labels.append(label)
+	patientData.append(data)
 
-            #Preprocess all images from the patient to set a zero mean
-            dataList -= numpy.mean(dataList)
-
-            #Add the 3d array of all images from a patient to the list
-            patientData.append(numpy.stack(dataList))
-            labels.append(idLabels[currDir])
     return patientData, labels
