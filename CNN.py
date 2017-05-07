@@ -71,7 +71,7 @@ def main():
     elif args.mode.lower() == "train":
         print("Reading validation images")
 
-        batchSize = 2 
+        batchSize = 16 
         valImages, valLabels = readValidationImages()
         
         bestLoss = float('inf')
